@@ -13,7 +13,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/dilnamusthafa81-coder/Company-website.git'
+                    url: 'https://github.com/rahmathbeeviiup-netizen/company-website.git'
             }
         }
 
