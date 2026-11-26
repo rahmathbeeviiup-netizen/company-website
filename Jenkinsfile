@@ -1,9 +1,6 @@
-
 pipeline {
-    agent none
-
-    options {
-        skipDefaultCheckout(true)
+    agent {
+        label 'build-agent'
     }
 
     environment {
@@ -14,40 +11,13 @@ pipeline {
     stages {
 
         stage('Checkout') {
-            agent {
-                label 'build-server-agent'
-            }
             steps {
                 git branch: 'main',
                     url: 'https://github.com/rahmathbeeviiup-netizen/company-website.git'
             }
         }
 
-        stage('Check Docker Permissions') {
-            agent {
-                label 'build-server-agent'
-            }
-            steps {
-                sh '''
-                    echo "===== USER ====="
-                    whoami
-
-                    echo "===== GROUPS ====="
-                    id
-
-                    echo "===== DOCKER SOCKET ====="
-                    ls -l /var/run/docker.sock
-
-                    echo "===== DOCKER TEST ====="
-                    docker ps
-                '''
-            }
-        }
-
         stage('Build Docker Image') {
-            agent {
-                label 'build-server-agent'
-            }
             steps {
                 sh '''
                     docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
@@ -56,20 +26,14 @@ pipeline {
         }
 
         stage('Verify Image') {
-            agent {
-                label 'build-server-agent'
-            }
             steps {
                 sh '''
-                    docker images ${DOCKER_IMAGE}
+                    docker images
                 '''
             }
         }
 
         stage('Push to Docker Hub') {
-            agent {
-                label 'build-server-agent'
-            }
             steps {
                 withCredentials([
                     usernamePassword(
@@ -79,13 +43,12 @@ pipeline {
                     )
                 ]) {
                     sh '''
-                        echo "$DOCKER_PASS" | docker login \
-                            -u "$DOCKER_USER" --password-stdin
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
 
                         docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} \
-                            "$DOCKER_USER/${DOCKER_IMAGE}:${DOCKER_TAG}"
+                            $DOCKER_USER/${DOCKER_IMAGE}:${DOCKER_TAG}
 
-                        docker push "$DOCKER_USER/${DOCKER_IMAGE}:${DOCKER_TAG}"
+                        docker push $DOCKER_USER/${DOCKER_IMAGE}:${DOCKER_TAG}
 
                         docker logout
                     '''
@@ -95,8 +58,9 @@ pipeline {
 
         stage('Deploy to Server') {
             agent {
-                label 'docker-deploy-agent'
+                label 'build-server-agent'
             }
+
             steps {
                 withCredentials([
                     usernamePassword(
@@ -106,19 +70,17 @@ pipeline {
                     )
                 ]) {
                     sh '''
-                        echo "$DOCKER_PASS" | docker login \
-                            -u "$DOCKER_USER" --password-stdin
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
 
-                        docker pull "$DOCKER_USER/${DOCKER_IMAGE}:${DOCKER_TAG}"
+                        docker pull $DOCKER_USER/${DOCKER_IMAGE}:${DOCKER_TAG}
 
                         docker stop company-website || true
                         docker rm company-website || true
 
                         docker run -d \
                             --name company-website \
-                            --restart unless-stopped \
                             -p 9090:80 \
-                            "$DOCKER_USER/${DOCKER_IMAGE}:${DOCKER_TAG}"
+                            $DOCKER_USER/${DOCKER_IMAGE}:${DOCKER_TAG}
 
                         docker logout
                     '''
